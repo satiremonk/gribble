@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>GRIBBLE BOARDS</title>
+  <link rel="icon" href="https://user-images.githubusercontent.com/2855464/174243583-d44925bb-37a4-4022-b952-c6944737f2d8.png" type="image/x-icon">
+  <style>
+    body {
+      font-family: sans-serif;
+    }
+
+    #drawingBoard {
+      border: 1px solid black;
+      cursor: crosshair;
+    }
+
+    #toolbar {
+      margin-bottom: 10px;
+    }
+
+    #cursorPreview {
+      position: absolute;
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 1000;
+      border: 1px solid rgba(0, 0, 0, 0.5);
+      display: none;
+    }
+
+    #brushSizePreview {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background-color: black;
+      vertical-align: middle;
+      margin-left: 5px;
+      border: 1px solid black;
+    }
+
+    #warning {
+      background-color: yellow;
+      padding: 5px;
+      text-align: center;
+      margin-bottom: 10px;
+    }
+
+    #fillButton {
+      background-image: url('https://user-images.githubusercontent.com/2855464/38269715-43d7cf68-374f-11e8-8007-4c688f323aa3.png');
+      background-size: cover;
+      width: 30px;
+      height: 30px;
+      border: none;
+      cursor: pointer;
+    }
+
+    #fillButton.active {
+      border: 2px solid blue;
+    }
+
+    #logo {
+      display: block;
+      margin: 0 auto;
+      text-align: center;
+      margin-bottom: 10px;
+    }
+
+    #logo img {
+      max-width: 300px;
+      height: auto;
+    }
+  </style>
+</head>
+<body>
+
+<div id="logo">
+  <img src="https://lh3.googleusercontent.com/0Whx2gytNf01ExQ2ZavSIsmVwS7XK7Vtwkqtp0EueA0byddrWIGidZLkqBu07F7I6kBjMnLzxBllpTFzmUalJX2C6IwOaDe7RwtiH_w7EAbipPvuST4kD8VCFpI2efA0zQ=w1280" alt="Gribble Boards Logo">
+</div>
+
+<div id="warning">SOME DRAWINGS MAY NOT COPY OVER TO OTHER SCREEN</div>
+
+<div id="toolbar">
+  <label for="colorPicker">Color:</label>
+  <input type="color" id="colorPicker" value="#000000">
+
+  <label for="brushSize">Brush Size:</label>
+    <select id="brushSize">
+      <option value="1">1</option>
+      <option value="5" selected>5</option>
+      <option value="10">10</option>
+      <option value="15">15</option>
+      <option value="20">20</option>
+      <option value="30">30</option>
+      <option value="40">40</option>
+      <option value="50">50</option>
+    </select>
+   <span id="brushSizePreview"></span>
+
+  <button id="undoButton">Undo</button>
+  <button id="clearButton">Clear All</button>
+  <button id="fillButton" title="Toggle Fill"></button>
+</div>
+
+<canvas id="drawingBoard" width="800" height="600"></canvas>
+<div id="cursorPreview"></div>
+
+<script>
+  const canvas = document.getElementById('drawingBoard');
+  const ctx = canvas.getContext('2d');
+  const colorPicker = document.getElementById('colorPicker');
+  const brushSizeSelect = document.getElementById('brushSize');
+  const brushSizePreview = document.getElementById('brushSizePreview');
+  const undoButton = document.getElementById('undoButton');
+  const clearButton = document.getElementById('clearButton');
+  const fillButton = document.getElementById('fillButton');
+  const cursorPreview = document.getElementById('cursorPreview');
+
+  let drawing = false;
+  let lastX = 0;
+  let lastY = 0;
+  let history = [];
+  let historyIndex = -1;
+  const channel = new BroadcastChannel('drawing-channel');
+  let isClick = false;
+  let isFilling = false;
+
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+
+  function startDrawing(e) {
+    if (isFilling) {
+      performFill(e);
+      return;
+    }
+
+    drawing = true;
+    isClick = true;
+    [lastX, lastY] = [e.offsetX, e.offsetY];
+    saveState();
+  }
+
+  function draw(e) {
+    if (isFilling) return;
+
+    if (!drawing) return;
+
+    const color = colorPicker.value;
+    const brushSize = brushSizeSelect.value;
+    const x = e.offsetX;
+    const y = e.offsetY;
+
+    drawLine(lastX, lastY, x, y, color, brushSize, true);
+    [lastX, lastY] = [x, y];
+
+      isClick = false;
+  }
+
+  function stopDrawing(e) {
+    if (isFilling) return;
+
+    drawing = false;
+
+      const color = colorPicker.value;
+      const brushSize = brushSizeSelect.value;
+      const x = e.offsetX;
+      const y = e.offsetY;
+
+      if (isClick) {
+          drawDot(x,y, color, brushSize, true)
+      }
+      isClick = false;
+  }
+
+  function clearCanvas() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    history = [];
+    historyIndex = -1;
+    saveState();
+    sendMessage({ type: 'clear' });
+  }
+
+  function undo() {
+    if (historyIndex > 0) {
+      historyIndex--;
+      restoreState();
+      sendCanvasData();
+    }
+  }
+
+  function saveState() {
+    if (historyIndex < history.length - 1) {
+      history = history.slice(0, historyIndex + 1);
+    }
+    history.push(canvas.toDataURL());
+    historyIndex++;
+  }
+
+  function restoreState() {
+    const img = new Image();
+    img.src = history[historyIndex];
+    img.onload = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0);
+    };
+  }
+
+  function updateCursorPreview(e) {
+    const brushSize = brushSizeSelect.value;
+    const color = colorPicker.value;
+    const x = e.clientX;
+    const y = e.clientY;
+
+    cursorPreview.style.width = brushSize + 'px';
+    cursorPreview.style.height = brushSize + 'px';
+    cursorPreview.style.backgroundColor = color;
+    cursorPreview.style.left = (x - brushSize / 2) + 'px';
+    cursorPreview.style.top = (y - brushSize / 2) + 'px';
+    cursorPreview.style.display = 'block';
+  }
+
+  function hideCursorPreview() {
+    cursorPreview.style.display = 'none';
+  }
+
+  canvas.addEventListener('mousedown', startDrawing);
+  canvas.addEventListener('mousemove', draw);
+  canvas.addEventListener('mouseup', stopDrawing);
+  canvas.addEventListener('mouseout', stopDrawing);
+
+  canvas.addEventListener('mousemove', updateCursorPreview);
+  canvas.addEventListener('mouseleave', hideCursorPreview);
+  canvas.addEventListener('mouseenter', updateCursorPreview);
+
+  clearButton.addEventListener('click', clearCanvas);
+  undoButton.addEventListener('click', undo);
+  fillButton.addEventListener('click', toggleFill);
+  window.addEventListener('load', saveState);
+
+  function drawLine(x0, y0, x1, y1, color, brushSize, send = false) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = brushSize;
+    ctx.beginPath();
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(x1, y1);
+    ctx.stroke();
+
+    if (send) {
+      sendMessage({ type: 'draw', x0, y0, x1, y1, color, brushSize });
+    }
+  }
+
+    function drawDot(x, y, color, brushSize, send = false) {
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(x, y, brushSize / 2, 0, 2 * Math.PI);
+        ctx.fill();
+
+        if (send) {
+            sendMessage({ type: 'drawDot', x, y, color, brushSize });
+        }
+    }
+
+
+  function sendMessage(message) {
+    channel.postMessage(message);
+  }
+
+  function sendCanvasData() {
+    const canvasData = canvas.toDataURL();
+    sendMessage({ type: 'canvasData', data: canvasData });
+  }
+
+  channel.onmessage = (event) => {
+    const message = event.data;
+
+    if (message.type === 'draw') {
+      drawLine(message.x0, message.y0, message.x1, message.y1, message.color, message.brushSize);
+    } else if (message.type === 'clear') {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      history = [];
+      historyIndex = -1;
+      saveState();
+    } else if (message.type === 'canvasData') {
+      const img = new Image();
+      img.src = message.data;
+      img.onload = () => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0);
+      };
+    } else if (message.type === 'drawDot') {
+        drawDot(message.x, message.y, message.color, message.brushSize);
+    } else if (message.type === 'fill') {
+        fillArea(message.x, message.y, message.color, false);
+    }
+  };
+
+  function updateBrushSizePreview() {
+    const brushSize = brushSizeSelect.value;
+    brushSizePreview.style.width = brushSize + 'px';
+    brushSizePreview.style.height = brushSize + 'px';
+    brushSizePreview.style.backgroundColor = colorPicker.value;
+
+  }
+
+  brushSizeSelect.addEventListener('change', updateBrushSizePreview);
+  colorPicker.addEventListener('input', updateBrushSizePreview);
+
+  updateBrushSizePreview();
+
+  function fillArea(startX, startY, fillColorOverride = null, send=true) {
+    const fillColor = fillColorOverride || colorPicker.value;
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+    const targetColor = getPixelColor(imageData, startX, startY);
+
+    if (colorsMatch(targetColor, hexToRgb(fillColor))) {
+        return;
+    }
+
+    const queue = [[startX, startY]];
+
+    while (queue.length > 0) {
+      const [x, y] = queue.shift();
+
+      if (x < 0 || x >= canvas.width || y < 0 || y >= canvas.height) {
+        continue;
+      }
+
+      const currentColor = getPixelColor(imageData, x, y);
+
+      if (!colorsMatch(currentColor, targetColor)) {
+        continue;
+      }
+
+      setPixelColor(imageData, x, y, hexToRgb(fillColor));
+
+      queue.push([x + 1, y]);
+      queue.push([x - 1, y]);
+      queue.push([x, y + 1]);
+      queue.push([x, y - 1]);
+    }
+
+    ctx.putImageData(imageData, 0, 0);
+
+    if (send) {
+        sendMessage({ type: 'fill', x: startX, y: startY, color: fillColor });
+    }
+  }
+
+  function getPixelColor(imageData, x, y) {
+    const { width, data } = imageData;
+    const index = (x + y * width) * 4;
+    return {
+      r: data[index],
+      g: data[index + 1],
+      b: data[index + 2],
+      a: data[index + 3],
+    };
+  }
+
+  function setPixelColor(imageData, x, y, color) {
+    const { width, data } = imageData;
+    const index = (x + y * width) * 4;
+    data[index] = color.r;
+    data[index + 1] = color.g;
+    data[index + 2] = color.b;
+    data[index + 3] = 255;
+  }
+
+  function colorsMatch(color1, color2) {
+    const tolerance = 1;
+    return (
+      Math.abs(color1.r - color2.r) <= tolerance &&
+      Math.abs(color1.g - color2.g) <= tolerance &&
+      Math.abs(color1.b - color2.b) <= tolerance
+    );
+  }
+
+  function hexToRgb(hex) {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? {
+      r: parseInt(result[1], 16),
+      g: parseInt(result[2], 16),
+      b: parseInt(result[3], 16)
+    } : null;
+  }
+
+  function toggleFill() {
+    isFilling = !isFilling;
+
+    if (isFilling) {
+      fillButton.classList.add('active');
+      canvas.style.cursor = 'url("https://user-images.githubusercontent.com/2855464/38269715-43d7cf68-374f-11e8-8007-4c688f323aa3.png"), auto';
+    } else {
+      fillButton.classList.remove('active');
+      canvas.style.cursor = 'crosshair';
+    }
+  }
+
+  function performFill(e) {
+    const x = e.offsetX;
+    const y = e.offsetY;
+    fillArea(x, y);
+  }
+
+</script>
+
+</body>
+</html>

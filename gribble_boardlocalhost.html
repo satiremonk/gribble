@@ -69,23 +69,29 @@
       height: auto;
     }
 
-    #subjectPickerContainer {
+    #footer {
+      text-align: center;
       margin-top: 20px;
-      border: 1px solid #ccc; /* Optional styling */
-      padding: 10px;
-
+      font-size: 0.8em;
+      color: #888; /* Optional: Style the text */
     }
-      #subjectPickerContainer h2, #subjectPickerContainer div {
-          text-align:center;
-      }
+     #subjectPickerContainer {
+          margin-top: 20px;
+          border: 1px solid #ccc; /* Optional styling */
+          padding: 10px;
 
-    #subjectPickerContainer #output {
-      font-family: Montserrat;
-    }
+        }
+          #subjectPickerContainer h2, #subjectPickerContainer div {
+              text-align:center;
+          }
 
-    #subjectPickerContainer body {
-      font-family: Montserrat;
-    }
+        #subjectPickerContainer #output {
+          font-family: Montserrat;
+        }
+
+        #subjectPickerContainer body {
+          font-family: Montserrat;
+        }
   </style>
 </head>
 <body>
@@ -149,6 +155,8 @@
   const channel = new BroadcastChannel('drawing-channel');
   let isClick = false;
   let isFilling = false;
+  let previewOffsetX = 0; // Add offset variables
+  let previewOffsetY = 0;
 
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
@@ -456,6 +464,8 @@
     drawing = true;
     isClick = true;
     [lastX, lastY] = [e.offsetX, e.offsetY];
+      previewOffsetX = e.clientX - canvas.offsetLeft;
+      previewOffsetY = e.clientY - canvas.offsetTop;
     saveState();
   }
 
@@ -471,6 +481,8 @@
 
     drawLine(lastX, lastY, x, y, color, brushSize, true);
     [lastX, lastY] = [x, y];
+      previewOffsetX = e.clientX - canvas.offsetLeft;
+      previewOffsetY = e.clientY - canvas.offsetTop;
 
       isClick = false;
   }
@@ -484,6 +496,8 @@
       const brushSize = brushSizeSelect.value;
       const x = e.offsetX;
       const y = e.offsetY;
+      previewOffsetX = e.clientX - canvas.offsetLeft;
+      previewOffsetY = e.clientY - canvas.offsetTop;
 
       if (isClick) {
           drawDot(x,y, color, brushSize, true)
@@ -499,43 +513,42 @@
     sendMessage({ type: 'clear' });
   }
 
-  function undo() {
+   function undo() {
     if (historyIndex > 0) {
       historyIndex--;
-      restoreState();
-      sendCanvasData();
+      const img = new Image();
+      img.src = history[historyIndex];
+      img.onload = () => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0);
+        sendCanvasData(); // Send data after restoring and redrawing
+      };
     }
   }
 
   function saveState() {
-    if (historyIndex < history.length - 1) {
+    // Remove future states if undo was performed and a new action is done.
+    if(historyIndex < history.length -1) {
       history = history.slice(0, historyIndex + 1);
     }
-    history.push(canvas.toDataURL());
+    history.push(canvas.toDataURL()); // Save the canvas as a data URL
     historyIndex++;
-  }
-
-  function restoreState() {
-    const img = new Image();
-    img.src = history[historyIndex];
-    img.onload = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(img, 0, 0);
-    };
   }
 
   function updateCursorPreview(e) {
     const brushSize = brushSizeSelect.value;
     const color = colorPicker.value;
-    const x = e.clientX;
-    const y = e.clientY;
+    // Correct cursor preview positioning using the offset
+    let x = e.clientX - canvas.offsetLeft;
+    let y = e.clientY - canvas.offsetTop;
 
     cursorPreview.style.width = brushSize + 'px';
     cursorPreview.style.height = brushSize + 'px';
     cursorPreview.style.backgroundColor = color;
-    cursorPreview.style.left = (x - brushSize / 2) + 'px';
-    cursorPreview.style.top = (y - brushSize / 2) + 'px';
+    cursorPreview.style.left = (e.clientX - brushSize / 2) + 'px'; // Center the circle
+    cursorPreview.style.top = (e.clientY - brushSize / 2) + 'px';
     cursorPreview.style.display = 'block';
+
   }
 
   function hideCursorPreview() {
@@ -585,9 +598,11 @@
     channel.postMessage(message);
   }
 
-  function sendCanvasData() {
-    const canvasData = canvas.toDataURL();
-    sendMessage({ type: 'canvasData', data: canvasData });
+   function sendCanvasData() {
+        // Ensure image loading is complete before sending
+        const canvasData = canvas.toDataURL();
+        sendMessage({ type: 'canvasData', data: canvasData });
+
   }
 
   channel.onmessage = (event) => {
@@ -601,12 +616,12 @@
       historyIndex = -1;
       saveState();
     } else if (message.type === 'canvasData') {
-      const img = new Image();
-      img.src = message.data;
-      img.onload = () => {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0);
-      };
+       const img = new Image();
+        img.src = message.data;
+        img.onload = () => {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, 0, 0);
+        };
     } else if (message.type === 'drawDot') {
         drawDot(message.x, message.y, message.color, message.brushSize);
     } else if (message.type === 'fill') {
@@ -724,6 +739,10 @@
   }
 
 </script>
+
+<div id="footer">
+  made by Jake Aumock for his Graphic Design friends. All 'copyrights' reserved
+</div>
 
 </body>
 </html>

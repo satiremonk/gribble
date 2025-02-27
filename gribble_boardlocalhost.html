@@ -68,6 +68,24 @@
       max-width: 300px;
       height: auto;
     }
+
+    #subjectPickerContainer {
+      margin-top: 20px;
+      border: 1px solid #ccc; /* Optional styling */
+      padding: 10px;
+
+    }
+      #subjectPickerContainer h2, #subjectPickerContainer div {
+          text-align:center;
+      }
+
+    #subjectPickerContainer #output {
+      font-family: Montserrat;
+    }
+
+    #subjectPickerContainer body {
+      font-family: Montserrat;
+    }
   </style>
 </head>
 <body>
@@ -103,6 +121,15 @@
 <canvas id="drawingBoard" width="800" height="600"></canvas>
 <div id="cursorPreview"></div>
 
+<div id="subjectPickerContainer">
+  <h2>Pick a word:</h2>
+  <div>
+    <button id="subjectPickerButton">Generate Words</button>
+  </div>
+
+  <div id="subjectPickerOutput"></div>
+</div>
+
 <script>
   const canvas = document.getElementById('drawingBoard');
   const ctx = canvas.getContext('2d');
@@ -125,6 +152,300 @@
 
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
+
+    //---------- Subject picker container code
+
+    //Subject picker element definitions
+    var subjectPickerButton = document.querySelector("#subjectPickerButton");
+    var subjectPickerOutput = document.getElementById("subjectPickerOutput");
+
+    //Initial save state for the Subject Picker to work.
+      let firstTab= true;
+      let isFirstLoad = true; // Track if this is the very first load
+
+    function loadData() {
+        let storedFirstTab = sessionStorage.getItem("firstTab");
+        if (storedFirstTab) {
+            firstTab = (storedFirstTab === "true"); // Ensure boolean type
+        }
+        // Check to see if data still matches local storage!
+        if(isFirstLoad) {
+          if (!firstTab) {
+             document.getElementById("subjectPickerContainer").style.display = 'none';
+           }
+          isFirstLoad=false;
+        }
+
+    }
+    function saveData() {
+        sessionStorage.setItem("firstTab", firstTab);
+        if (!firstTab) {
+           document.getElementById("subjectPickerContainer").style.display = 'none';
+       }
+       else {
+         document.getElementById("subjectPickerContainer").style.display = 'block';
+       }
+    }
+
+    //Check if on the first tab when page is triggered!
+      loadData();
+
+      function sendMessageToAnotherTab(message) {
+          const otherTabsChannell = new BroadcastChannel('otherTabsChannel');
+          otherTabsChannell.postMessage(message);
+      }
+
+      function removeSubjectPicker(event) {
+          firstTab = false;
+          // Update to make data not visible
+          saveData();
+          sendMessageToAnotherTab("removeElement");
+      }
+
+      subjectPickerButton.addEventListener("click", getWord);
+
+     function getWord(){
+
+
+      var theWord= [
+        "hippo",
+        "triangle",
+        "smile",
+        "chicken",
+        "snowman",
+        "sea turtle",
+        "star",
+        "worm",
+        "monster",
+        "table",
+        "leg",
+        "dragon",
+        "beach",
+        "helicopter",
+        "love",
+        "eye",
+        "suitcase",
+        "owl",
+        "roly poly/pill bug/doodle bug",
+        "giraffe",
+        "pie",
+        "popsicle",
+        "football",
+        "bread",
+        "boy",
+        "jacket",
+        "light",
+        "cow",
+        "octopus",
+        "swing",
+        "skateboard",
+        "hamburger",
+        "swimming pool",
+        "ghost",
+        "bear",
+        "crack",
+        "hand",
+        "float",
+        "wheel",
+        "feet",
+        "girl",
+        "doll",
+        "pants",
+        "carrot",
+        "bowl",
+        "crab",
+        "diamond",
+        "person",
+        "fly",
+        "bike",
+        "magic carpet",
+        "music",
+        "bathroom scale",
+        "pinecone",
+        "black widow",
+        "suitcase",
+        "cotton candy",
+        "astronaut",
+        "sink",
+        "read",
+        "grandma",
+        "napkin",
+        "umbrella",
+        "flagpole",
+        "cork",
+        "printer",
+        "tiger",
+        "saltwater",
+        "piranha",
+        "tongs",
+        "chimney",
+        "quicksand",
+        "dimple",
+        "sunglasses",
+        "sprinkler",
+        "draw",
+        "scientist",
+        "needle",
+        "ski",
+        "ask",
+        "stain",
+        "porthole",
+        "helicopter",
+        "lid",
+        "extension cord",
+        "lucky",
+        "basket",
+        "cobweb",
+        "squirt gun",
+        "corndog",
+        "seed",
+        "wood",
+        "battery",
+        "castle",
+        "chocolate chip cookie",
+        "glove",
+        "clown",
+        "outside",
+        "blimp",
+        "dominoes",
+        "injury",
+        "optometrist",
+        "clamp",
+        "letter opener",
+        "banister",
+        "recess",
+        "wooly mammoth",
+        "molar",
+        "glitter",
+        "wrap",
+        "migrate",
+        "tide",
+        "drive-through",
+        "midnight",
+        "guarantee",
+        "plank",
+        "vitamin",
+        "jungle",
+        "captain",
+        "kneel",
+        "country",
+        "dance",
+        "caviar",
+        "fresh water",
+        "baggage",
+        "pail",
+        "wedding cake",
+        "attack",
+        "interception",
+        "fast food",
+        "stadium",
+        "eighteen-wheeler",
+        "season",
+        "end zone",
+        "logo",
+        "science",
+        "tow truck",
+        "advertisement",
+        "hang glider",
+        "degree",
+        "toolbox",
+        "golf cart",
+        "stow",
+        "vet",
+        "sandbox",
+        "full",
+        "dripping",
+        "germ",
+        "thrift store",
+        "tourist",
+        "czar",
+        "zip code",
+        "duvet",
+        "guru",
+        "fun",
+        "confide",
+        "trawler",
+        "big bang theory",
+        "philosopher",
+        "temper",
+        "swag",
+        "sickle",
+        "sophomore",
+        "pawnshop",
+        "society",
+        "deceive",
+        "water vapor",
+        "admire",
+        "steamboat",
+        "emperor",
+        "courthouse",
+        "expired",
+        "danger",
+        "mayhem",
+        "ornithologist",
+        "addendum",
+        "cubit",
+        "armada",
+        "castaway",
+        "knowledge",
+        "channel",
+        "intern",
+        "Everglades",
+        "interject",
+        "junk drawer",
+        "shame",
+        "siesta",
+        "time zone",
+        "whiplash",
+        "first mate",
+        "zero",
+        "steel drum",
+        "carat",
+        "villain",
+        "vision",
+        "loiterer",
+        "haberdashery",
+        "property",
+        "preteen",
+        "emigrate"
+      ];
+
+      let randomWords = [];
+      let usedIndices = []; // Keep track of indices already used
+
+      const numExtraHard = 50; // Number of "extra hard" words at the end
+      const extraHardStart = theWord.length - numExtraHard;
+
+      while (randomWords.length < 3) {
+        let wordNum;
+        // Bias the random selection toward the non-"extra hard" words
+        if (Math.random() < 0.8) { // 80% chance of picking from the easier words
+          wordNum = Math.floor(Math.random() * extraHardStart);
+        } else {
+          wordNum = extraHardStart + Math.floor(Math.random() * numExtraHard);
+        }
+
+
+
+        if (!usedIndices.includes(wordNum)) {
+          randomWords.push(theWord[wordNum]);
+          usedIndices.push(wordNum);
+        }
+      }
+
+
+      subjectPickerOutput.textContent = randomWords.join(", ");
+    }
+
+    //Listen for this function for a response
+    const otherTabsChannell = new BroadcastChannel('otherTabsChannel');
+      otherTabsChannell.onmessage = (event) => {
+            if (event.data === "removeElement") {
+                firstTab=false;
+               document.getElementById("subjectPickerContainer").style.display = 'none';
+
+           }
+      };
 
   function startDrawing(e) {
     if (isFilling) {
